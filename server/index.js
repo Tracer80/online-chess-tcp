@@ -9,48 +9,56 @@ const server = net.createServer((socket) => {
   console.log('Client connected:', socket.remoteAddress);
 
   socket.on('data', data => {
-    let msg;
-    try {
-      msg = JSON.parse(data.toString());
-    } catch (err) {
-      console.warn('Invalid JSON:', data.toString());
-      return;
-    }
+    const text = data.toString();
+    console.log('-- raw data:', JSON.stringify(text));
 
-    switch (msg.type) {
-      case 'LOGIN':
-        // store username + socket
-        socket.username = msg.username;
-        clients.push({ username: msg.username, socket });
-        console.log(`→ ${msg.username} logged in`);
-        socket.write(JSON.stringify({ 
-          type: 'LOGIN_ACK', 
-          success: true, 
-          waitingCount: clients.length - 1 
-        }));
-        break;
+    // Split on newline in case multiple messages arrive together
+    const lines = text.split('\n').filter(line => line.trim());
+    for (const line of lines) {
+      let msg;
+      try {
+        msg = JSON.parse(line);
+      } catch (err) {
+        console.warn('Invalid JSON:', line);
+        continue;
+      }
 
-      case 'LIST_WAITING':
-        // all other clients who have logged in but not in a game
-        const waiting = clients
-          .filter(c => c.socket !== socket)
-          .map(c => c.username);
-        socket.write(JSON.stringify({
-          type: 'LIST_WAITING_ACK',
-          waiting
-        }));
-        break;
+      switch (msg.type) {
+        case 'LOGIN':
+          socket.username = msg.username;
+          clients.push({ username: msg.username, socket });
+          console.log(`→ ${msg.username} logged in`);
+          socket.write(
+            JSON.stringify({
+              type: 'LOGIN_ACK',
+              success: true,
+              waitingCount: clients.length - 1
+            }) + '\n'
+          );
+          break;
 
-      default:
-        console.warn('Unhandled message type:', msg.type);
+        case 'LIST_WAITING':
+          const waiting = clients
+            .filter(c => c.socket !== socket)
+            .map(c => c.username);
+          socket.write(
+            JSON.stringify({
+              type: 'LIST_WAITING_ACK',
+              waiting
+            }) + '\n'
+          );
+          break;
+
+        default:
+          console.warn('Unhandled message type:', msg.type);
+      }
     }
   });
 
   socket.on('close', () => {
-    // remove from clients array
     const idx = clients.findIndex(c => c.socket === socket);
     if (idx !== -1) clients.splice(idx, 1);
-    console.log('Client disconnected');
+    console.log('Client disconnected:', socket.username || socket.remoteAddress);
   });
 });
 

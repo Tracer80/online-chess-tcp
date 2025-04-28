@@ -9,7 +9,7 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 const socket = net.connect(PORT, HOST, () => {
   console.log(`♟️  Connected to server at ${HOST}:${PORT}`);
   rl.question('Enter username: ', name => {
-    socket.write(JSON.stringify({ type: 'LOGIN', username: name }));
+    socket.write(JSON.stringify({ type: 'LOGIN', username: name }) + '\n');
   });
 });
 
@@ -28,9 +28,10 @@ socket.on('data', data => {
       break;
 
     case 'LIST_WAITING_ACK':
-      console.log('🕒 Waiting players:', msg.waiting.length
-        ? msg.waiting.join(', ')
-        : '<none>');
+      console.log(
+        '🕒 Waiting players:',
+        msg.waiting.length ? msg.waiting.join(', ') : '<none>'
+      );
       promptCommand();
       break;
 
@@ -44,9 +45,10 @@ socket.on('end', () => console.log('Disconnected from server'));
 
 function promptCommand() {
   rl.question('\n> ', line => {
-    const [ cmd, arg ] = line.trim().split(/\s+/);
+    const [cmd] = line.trim().split(/\s+/);
+
     if (cmd === 'list') {
-      socket.write(JSON.stringify({ type: 'LIST_WAITING' }));
+      socket.write(JSON.stringify({ type: 'LIST_WAITING' }) + '\n');
     } else if (cmd === 'quit') {
       socket.end();
       rl.close();
@@ -54,7 +56,8 @@ function promptCommand() {
     } else {
       console.log(`Unknown command: ${cmd}`);
     }
-    // loop
-    // further commands (challenge, move) will be added here later
+
+    // loop back
+    promptCommand();
   });
 }
