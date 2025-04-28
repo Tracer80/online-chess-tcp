@@ -1,0 +1,20 @@
+{
+  "name": "online-chess-tcp",
+  "version": "1.0.0",
+  "description": "online chess server over TCP sockets \r # Online Chess over TCP",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tracer80/online-chess-tcp.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Tracer80/online-chess-tcp/issues"
+  },
+  "homepage": "https://github.com/Tracer80/online-chess-tcp#readme"
+}
