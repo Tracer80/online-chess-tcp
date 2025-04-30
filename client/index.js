@@ -1,66 +1,86 @@
 // client/index.js
-const net = require('net');
+const net      = require('net');
 const readline = require('readline');
 
 const HOST = 'localhost';
 const PORT = 5555;
-const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+
+let username = '';
+let myColor  = '';   // will become 'WHITE' or 'BLACK'
 
 const socket = net.connect(PORT, HOST, () => {
   console.log(`♟️  Connected to server at ${HOST}:${PORT}`);
+});
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout,
+  prompt: '> ',
+});
+
+// Step 1: ask for your name
+socket.on('connect', () => {
   rl.question('Enter username: ', name => {
-    socket.write(JSON.stringify({ type: 'LOGIN', username: name }) + '\n');
+    username = name.trim() || 'Guest';
+    socket.write(JSON.stringify({ type: 'LOGIN', username }) + '\n');
+
+    // switch to user-named prompt
+    rl.setPrompt(`${username}> `);
+    rl.prompt();
   });
 });
 
-socket.on('data', data => {
-  const msg = JSON.parse(data.toString());
-  console.log('SERVER ➜', msg);
+// Step 2: handle every server message
+socket.on('data', raw => {
+  let msg;
+  try {
+    msg = JSON.parse(raw.toString());
+  } catch (e) {
+    console.error('⚠️  Invalid JSON from server:', raw.toString());
+    rl.prompt();
+    return;
+  }
 
   switch (msg.type) {
     case 'LOGIN_ACK':
-      if (msg.success) {
-        console.log(`✅ Logged in! ${msg.waitingCount} waiting.`);
-        promptCommand();
-      }
+      console.log(msg.success
+        ? `✅ Logged in as ${username}. Waiting: ${msg.waitingCount}`
+        : `❌ Login failed`);
       break;
 
     case 'LIST_WAITING_ACK':
       console.log('🕒 Waiting players:', msg.waiting.join(', ') || '<none>');
-      promptCommand();
       break;
 
     case 'INCOMING_CHALLENGE':
       console.log(`⚔️  ${msg.from} challenged you!`);
       console.log(`Type "accept ${msg.from}" or "reject ${msg.from}"`);
-      promptCommand();
       break;
 
     case 'CHALLENGE_ACK':
       console.log(`📨 ${msg.message}`);
-      promptCommand();
       break;
 
     case 'CHALLENGE_REJECTED':
       console.log(`🚫 ${msg.from} rejected your challenge`);
-      promptCommand();
       break;
 
     case 'GAME_START':
-      console.log(
-        `🎉 Game starting - WHITE: ${msg.white}, BLACK: ${msg.black}`
-      );
-      promptCommand();
+      myColor = msg.white === username ? 'WHITE' : 'BLACK';
+      console.log(`🎉 Game start — WHITE: ${msg.white}, BLACK: ${msg.black}`);
+      console.log(`👉 You are playing as ${myColor}`);
       break;
 
     case 'MOVE_ACK':
-      console.log(`✅ You moved from ${msg.from} → ${msg.to}`);
-      promptCommand();
+      console.log(`✅ You moved ${msg.from} → ${msg.to}`);
       break;
 
     case 'OPPONENT_MOVE':
-      console.log(`👤 Opponent moved from ${msg.from} → ${msg.to}`);
-      promptCommand();
+      console.log(`👤 Opponent moved ${msg.from} → ${msg.to}`);
+      break;
+
+    case 'MOVE_INVALID':
+      console.log(`❌ Invalid move ${msg.from} → ${msg.to}`);
       break;
 
     case 'BOARD_UPDATE':
@@ -70,75 +90,115 @@ socket.on('data', data => {
         `⏱️  Timers — White: ${msg.timers.white.toFixed(1)}s, ` +
         `Black: ${msg.timers.black.toFixed(1)}s`
       );
-      console.log(`Next turn: ${msg.turn}\n`);
-      promptCommand();
+      console.log(`→ ${msg.turn} to move`);
       break;
 
-    case 'MOVE_INVALID':
-      console.log('❌ Invalid move:', msg.from, '→', msg.to);
-      promptCommand();
+    case 'GAME_OVER':
+      console.log(`🏁 Game over! Winner: ${msg.winner}`);
+      process.exit(0);
       break;
 
     default:
-      // Unknown or unhandled message
-      promptCommand();
+      console.log('🔔 Unhandled message:', msg);
   }
+
+  // update prompt to either <username> or <WHITE|BLACK>
+  rl.setPrompt(`${myColor || username}> `);
+  rl.prompt();
 });
 
-socket.on('end', () => console.log('Disconnected from server'));
+// Step 3: single readline loop for all your commands
+rl.on('line', line => {
+  const input = line.trim();
+  if (!input) return rl.prompt();
 
-function promptCommand() {
-  rl.question('\n> ', line => {
-    const parts = line.trim().split(/\s+/);
-    const cmd = parts[0];
-    const arg = parts[1];
+  const [cmd, ...args] = input.split(/\s+/);
+  switch (cmd) {
+    case 'help':
+      console.log('Commands:\n' +
+        '  list\n' +
+        '  challenge <user>\n' +
+        '  accept    <user>\n' +
+        '  reject    <user>\n' +
+        '  move r1 c1 r2 c2   (numeric) \n' +
+        '  move a2 a4         (algebraic)\n' +
+        '  quit');
+      break;
 
-    switch (cmd) {
-      case 'list':
-        socket.write(JSON.stringify({ type: 'LIST_WAITING' }) + '\n');
-        break;
+    case 'list':
+      socket.write(JSON.stringify({ type: 'LIST_WAITING' }) + '\n');
+      break;
 
-      case 'challenge':
+    case 'challenge':
+      if (!args[0]) {
+        console.log('Usage: challenge <username>');
+      } else {
         socket.write(JSON.stringify({
           type: 'CHALLENGE',
-          target: arg
+          target: args[0]
         }) + '\n');
-        break;
+      }
+      break;
 
-      case 'accept':
+    case 'accept':
+      if (!args[0]) {
+        console.log('Usage: accept <username>');
+      } else {
         socket.write(JSON.stringify({
           type: 'ACCEPT',
-          from: arg
+          from: args[0]
         }) + '\n');
-        break;
+      }
+      break;
 
-      case 'reject':
+    case 'reject':
+      if (!args[0]) {
+        console.log('Usage: reject <username>');
+      } else {
         socket.write(JSON.stringify({
           type: 'REJECT',
-          from: arg
+          from: args[0]
         }) + '\n');
-        break;
+      }
+      break;
 
-      case 'move':
-        // syntax: move r1 c1 r2 c2
-        const [, r1, c1, r2, c2] = parts;
-        socket.write(JSON.stringify({
-          type: 'MOVE',
-          from: [parseInt(r1, 10), parseInt(c1, 10)],
-          to:   [parseInt(r2, 10), parseInt(c2, 10)]
-        }) + '\n');
-        break;
+    case 'move': {
+      // algebraic notation? e.g. "move a2 a4"
+      const algRe = /^[a-h][1-8]$/i;
+      if (args.length === 2 && algRe.test(args[0]) && algRe.test(args[1])) {
+        const fileToCol = f => f.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0) + 1;
+        const rankToRow = r => 9 - parseInt(r, 10);
+        const [f0, r0] = args[0].split('');
+        const [f1, r1] = args[1].split('');
+        const from = [ rankToRow(r0), fileToCol(f0) ];
+        const to   = [ rankToRow(r1), fileToCol(f1) ];
+        socket.write(JSON.stringify({ type: 'MOVE', from, to }) + '\n');
 
-      case 'quit':
-        socket.end();
-        rl.close();
-        return;
-
-      default:
-        console.log(`Unknown command: ${cmd}`);
+      // numeric fallback: "move 7 1 5 1"
+      } else if (args.length >= 4) {
+        const [r1, c1, r2, c2] = args.map(n => parseInt(n, 10));
+        if ([r1,c1,r2,c2].some(isNaN)) {
+          console.log('Usage: move r1 c1 r2 c2   or   move a2 a4');
+        } else {
+          socket.write(JSON.stringify({
+            type: 'MOVE',
+            from: [r1, c1],
+            to:   [r2, c2]
+          }) + '\n');
+        }
+      } else {
+        console.log('Usage: move r1 c1 r2 c2   or   move a2 a4');
+      }
+      break;
     }
 
-    // loop back for next command
-    promptCommand();
-  });
-}
+    case 'quit':
+      socket.end();
+      return rl.close();
+
+    default:
+      console.log(`Unknown command: "${cmd}"`);
+  }
+
+  rl.prompt();
+});

@@ -1,4 +1,4 @@
-// server/index.js
+/// server/index.js
 const net = require('net');
 const SessionManager = require('./manager');
 const PORT = 5555;
@@ -102,7 +102,19 @@ const server = net.createServer(socket => {
 
         case 'MOVE': {
           const session = mgr.findSession(socket);
-          if (session) session.handleMove(socket, msg.from, msg.to);
+          if (session) {
+            session.handleMove(socket, msg.from, msg.to);
+
+            // if the move ended the game, notify both players
+            if (session.board.gameOver) {
+              const overMsg = JSON.stringify({
+                type: 'GAME_OVER',
+                winner: session.board.winner
+              }) + '\n';
+              session.white.socket.write(overMsg);
+              session.black.socket.write(overMsg);
+            }
+          }
           break;
         }
 
