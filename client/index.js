@@ -12,6 +12,15 @@ const socket = net.connect(PORT, HOST, () => {
   console.log(`♟️  Connected to server at ${HOST}:${PORT}`);
 });
 
+// ——— graceful error & close handling ———
+socket.on('error', err => {
+  console.error(`⚠️  Connection error: ${err.message}`);
+});
+
+socket.on('close', hadError => {
+  console.log(`🔌 Disconnected from server${hadError ? ' (due to error)' : ''}`);
+});
+
 const rl = readline.createInterface({
   input: process.stdin,
   output: process.stdout,
@@ -23,8 +32,6 @@ socket.on('connect', () => {
   rl.question('Enter username: ', name => {
     username = name.trim() || 'Guest';
     socket.write(JSON.stringify({ type: 'LOGIN', username }) + '\n');
-
-    // switch to user-named prompt
     rl.setPrompt(`${username}> `);
     rl.prompt();
   });
@@ -80,7 +87,10 @@ socket.on('data', raw => {
       break;
 
     case 'MOVE_INVALID':
-      console.log(`❌ Invalid move ${msg.from} → ${msg.to}`);
+      console.log(
+        `❌ Invalid move ${msg.from} → ${msg.to}` +
+        (msg.reason ? `  [Reason: ${msg.reason}]` : '')
+      );
       break;
 
     case 'BOARD_UPDATE':
@@ -95,14 +105,12 @@ socket.on('data', raw => {
 
     case 'GAME_OVER':
       console.log(`🏁 Game over! Winner: ${msg.winner}`);
-      process.exit(0);
       break;
 
     default:
       console.log('🔔 Unhandled message:', msg);
   }
 
-  // update prompt to either <username> or <WHITE|BLACK>
   rl.setPrompt(`${myColor || username}> `);
   rl.prompt();
 });
@@ -120,7 +128,7 @@ rl.on('line', line => {
         '  challenge <user>\n' +
         '  accept    <user>\n' +
         '  reject    <user>\n' +
-        '  move r1 c1 r2 c2   (numeric) \n' +
+        '  move r1 c1 r2 c2   (numeric)\n' +
         '  move a2 a4         (algebraic)\n' +
         '  quit');
       break;
@@ -130,62 +138,40 @@ rl.on('line', line => {
       break;
 
     case 'challenge':
-      if (!args[0]) {
-        console.log('Usage: challenge <username>');
-      } else {
-        socket.write(JSON.stringify({
-          type: 'CHALLENGE',
-          target: args[0]
-        }) + '\n');
-      }
+      if (!args[0]) console.log('Usage: challenge <username>');
+      else socket.write(JSON.stringify({ type: 'CHALLENGE', target: args[0] }) + '\n');
       break;
 
     case 'accept':
-      if (!args[0]) {
-        console.log('Usage: accept <username>');
-      } else {
-        socket.write(JSON.stringify({
-          type: 'ACCEPT',
-          from: args[0]
-        }) + '\n');
-      }
+      if (!args[0]) console.log('Usage: accept <username>');
+      else socket.write(JSON.stringify({ type: 'ACCEPT', from: args[0] }) + '\n');
       break;
 
     case 'reject':
-      if (!args[0]) {
-        console.log('Usage: reject <username>');
-      } else {
-        socket.write(JSON.stringify({
-          type: 'REJECT',
-          from: args[0]
-        }) + '\n');
-      }
+      if (!args[0]) console.log('Usage: reject <username>');
+      else socket.write(JSON.stringify({ type: 'REJECT', from: args[0] }) + '\n');
       break;
 
     case 'move': {
-      // algebraic notation? e.g. "move a2 a4"
       const algRe = /^[a-h][1-8]$/i;
       if (args.length === 2 && algRe.test(args[0]) && algRe.test(args[1])) {
-        const fileToCol = f => f.toLowerCase().charCodeAt(0) - 'a'.charCodeAt(0) + 1;
+        const fileToCol = f => f.toLowerCase().charCodeAt(0) - 96;
         const rankToRow = r => 9 - parseInt(r, 10);
         const [f0, r0] = args[0].split('');
         const [f1, r1] = args[1].split('');
-        const from = [ rankToRow(r0), fileToCol(f0) ];
-        const to   = [ rankToRow(r1), fileToCol(f1) ];
-        socket.write(JSON.stringify({ type: 'MOVE', from, to }) + '\n');
+        socket.write(JSON.stringify({
+          type: 'MOVE',
+          from: [rankToRow(r0), fileToCol(f0)],
+          to:   [rankToRow(r1), fileToCol(f1)]
+        }) + '\n');
 
-      // numeric fallback: "move 7 1 5 1"
       } else if (args.length >= 4) {
         const [r1, c1, r2, c2] = args.map(n => parseInt(n, 10));
-        if ([r1,c1,r2,c2].some(isNaN)) {
-          console.log('Usage: move r1 c1 r2 c2   or   move a2 a4');
-        } else {
-          socket.write(JSON.stringify({
-            type: 'MOVE',
-            from: [r1, c1],
-            to:   [r2, c2]
-          }) + '\n');
-        }
+        socket.write(JSON.stringify({
+          type: 'MOVE',
+          from: [r1, c1],
+          to:   [r2, c2]
+        }) + '\n');
       } else {
         console.log('Usage: move r1 c1 r2 c2   or   move a2 a4');
       }
@@ -194,7 +180,8 @@ rl.on('line', line => {
 
     case 'quit':
       socket.end();
-      return rl.close();
+      rl.close();
+      break;
 
     default:
       console.log(`Unknown command: "${cmd}"`);
