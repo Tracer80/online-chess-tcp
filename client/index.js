@@ -37,78 +37,82 @@ socket.on('connect', () => {
   });
 });
 
-// Step 2: handle every server message
+// Step 2: handle every server message (supports multiple JSON per packet)
 socket.on('data', raw => {
-  let msg;
-  try {
-    msg = JSON.parse(raw.toString());
-  } catch (e) {
-    console.error('⚠️  Invalid JSON from server:', raw.toString());
-    rl.prompt();
-    return;
-  }
+  const lines = raw.toString().split('\n').filter(l => l.trim());
+  for (const line of lines) {
+    let msg;
+    try {
+      msg = JSON.parse(line);
+    } catch (e) {
+      console.error('⚠️  Invalid JSON from server:', line);
+      continue;
+    }
 
-  switch (msg.type) {
-    case 'LOGIN_ACK':
-      console.log(msg.success
-        ? `✅ Logged in as ${username}. Waiting: ${msg.waitingCount}`
-        : `❌ Login failed`);
-      break;
+    switch (msg.type) {
+      case 'LOGIN_ACK':
+        console.log(msg.success
+          ? `✅ Logged in as ${username}. Waiting: ${msg.waitingCount}`
+          : `❌ Login failed`);
+        break;
 
-    case 'LIST_WAITING_ACK':
-      console.log('🕒 Waiting players:', msg.waiting.join(', ') || '<none>');
-      break;
+      case 'LIST_WAITING_ACK':
+        console.log('🕒 Waiting players:', msg.waiting.join(', ') || '<none>');
+        break;
 
-    case 'INCOMING_CHALLENGE':
-      console.log(`⚔️  ${msg.from} challenged you!`);
-      console.log(`Type "accept ${msg.from}" or "reject ${msg.from}"`);
-      break;
+      case 'INCOMING_CHALLENGE':
+        console.log(`⚔️  ${msg.from} challenged you!`);
+        console.log(`Type "accept ${msg.from}" or "reject ${msg.from}"`);
+        break;
 
-    case 'CHALLENGE_ACK':
-      console.log(`📨 ${msg.message}`);
-      break;
+      case 'CHALLENGE_ACK':
+        console.log(`📨 ${msg.message}`);
+        break;
 
-    case 'CHALLENGE_REJECTED':
-      console.log(`🚫 ${msg.from} rejected your challenge`);
-      break;
+      case 'CHALLENGE_REJECTED':
+        console.log(`🚫 ${msg.from} rejected your challenge`);
+        break;
 
-    case 'GAME_START':
-      myColor = msg.white === username ? 'WHITE' : 'BLACK';
-      console.log(`🎉 Game start — WHITE: ${msg.white}, BLACK: ${msg.black}`);
-      console.log(`👉 You are playing as ${myColor}`);
-      break;
+      case 'GAME_START':
+        myColor = msg.white === username ? 'WHITE' : 'BLACK';
+        console.log(`🎉 Game start — WHITE: ${msg.white}, BLACK: ${msg.black}`);
+        console.log(`👉 You are playing as ${myColor}`);
+        break;
 
-    case 'MOVE_ACK':
-      console.log(`✅ You moved ${msg.from} → ${msg.to}`);
-      break;
+      case 'MOVE_ACK':
+        console.log(`✅ You moved ${msg.from} → ${msg.to}`);
+        break;
 
-    case 'OPPONENT_MOVE':
-      console.log(`👤 Opponent moved ${msg.from} → ${msg.to}`);
-      break;
+      case 'OPPONENT_MOVE':
+        console.log(`👤 Opponent moved ${msg.from} → ${msg.to}`);
+        break;
 
-    case 'MOVE_INVALID':
-      console.log(
-        `❌ Invalid move ${msg.from} → ${msg.to}` +
-        (msg.reason ? `  [Reason: ${msg.reason}]` : '')
-      );
-      break;
+      case 'MOVE_INVALID':
+        console.log(
+          `❌ Invalid move ${msg.from} → ${msg.to}` +
+          (msg.reason ? `  [Reason: ${msg.reason}]` : '')
+        );
+        break;
 
-    case 'BOARD_UPDATE':
-      console.log('\n📋 Current Board:');
-      msg.board.forEach(row => console.log(' ' + row.join(' ')));
-      console.log(
-        `⏱️  Timers — White: ${msg.timers.white.toFixed(1)}s, ` +
-        `Black: ${msg.timers.black.toFixed(1)}s`
-      );
-      console.log(`→ ${msg.turn} to move`);
-      break;
+      case 'BOARD_UPDATE':
+        console.log('\n📋 Current Board:');
+        msg.board.forEach(row => console.log(' ' + row.join(' ')));
+        console.log(
+          `⏱️  Timers — White: ${msg.timers.white.toFixed(1)}s, ` +
+          `Black: ${msg.timers.black.toFixed(1)}s`
+        );
+        console.log(`→ ${msg.turn} to move`);
+        break;
 
-    case 'GAME_OVER':
-      console.log(`🏁 Game over! Winner: ${msg.winner}`);
-      break;
+      case 'GAME_OVER':
+        console.log(`🏁 Game over! Winner: ${msg.winner}`);
+        socket.end();
+        rl.close();
+        break;
 
-    default:
-      console.log('🔔 Unhandled message:', msg);
+      default:
+        console.log('🔔 Unhandled message:', msg);
+    }
   }
 
   rl.setPrompt(`${myColor || username}> `);
@@ -164,7 +168,6 @@ rl.on('line', line => {
           from: [rankToRow(r0), fileToCol(f0)],
           to:   [rankToRow(r1), fileToCol(f1)]
         }) + '\n');
-
       } else if (args.length >= 4) {
         const [r1, c1, r2, c2] = args.map(n => parseInt(n, 10));
         socket.write(JSON.stringify({
