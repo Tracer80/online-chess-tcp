@@ -50,11 +50,37 @@ socket.on('data', data => {
       console.log(
         `🎉 Game starting - WHITE: ${msg.white}, BLACK: ${msg.black}`
       );
-      // next: start move loop…
+      promptCommand();
+      break;
+
+    case 'MOVE_ACK':
+      console.log(`✅ You moved from ${msg.from} → ${msg.to}`);
+      promptCommand();
+      break;
+
+    case 'OPPONENT_MOVE':
+      console.log(`👤 Opponent moved from ${msg.from} → ${msg.to}`);
+      promptCommand();
+      break;
+
+    case 'BOARD_UPDATE':
+      console.log('\n📋 Current Board:');
+      msg.board.forEach(row => console.log(' ' + row.join(' ')));
+      console.log(
+        `⏱️  Timers — White: ${msg.timers.white.toFixed(1)}s, ` +
+        `Black: ${msg.timers.black.toFixed(1)}s`
+      );
+      console.log(`Next turn: ${msg.turn}\n`);
+      promptCommand();
+      break;
+
+    case 'MOVE_INVALID':
+      console.log('❌ Invalid move:', msg.from, '→', msg.to);
+      promptCommand();
       break;
 
     default:
-      console.log('🔔 Unhandled:', msg);
+      // Unknown or unhandled message
       promptCommand();
   }
 });
@@ -63,28 +89,56 @@ socket.on('end', () => console.log('Disconnected from server'));
 
 function promptCommand() {
   rl.question('\n> ', line => {
-    const [cmd, arg] = line.trim().split(/\s+/);
+    const parts = line.trim().split(/\s+/);
+    const cmd = parts[0];
+    const arg = parts[1];
+
     switch (cmd) {
       case 'list':
         socket.write(JSON.stringify({ type: 'LIST_WAITING' }) + '\n');
         break;
+
       case 'challenge':
-        socket.write(JSON.stringify({ type: 'CHALLENGE', target: arg }) + '\n');
+        socket.write(JSON.stringify({
+          type: 'CHALLENGE',
+          target: arg
+        }) + '\n');
         break;
+
       case 'accept':
-        socket.write(JSON.stringify({ type: 'ACCEPT', from: arg }) + '\n');
+        socket.write(JSON.stringify({
+          type: 'ACCEPT',
+          from: arg
+        }) + '\n');
         break;
+
       case 'reject':
-        socket.write(JSON.stringify({ type: 'REJECT', from: arg }) + '\n');
+        socket.write(JSON.stringify({
+          type: 'REJECT',
+          from: arg
+        }) + '\n');
         break;
+
+      case 'move':
+        // syntax: move r1 c1 r2 c2
+        const [, r1, c1, r2, c2] = parts;
+        socket.write(JSON.stringify({
+          type: 'MOVE',
+          from: [parseInt(r1, 10), parseInt(c1, 10)],
+          to:   [parseInt(r2, 10), parseInt(c2, 10)]
+        }) + '\n');
+        break;
+
       case 'quit':
         socket.end();
         rl.close();
         return;
+
       default:
         console.log(`Unknown command: ${cmd}`);
     }
-    // loop
+
+    // loop back for next command
     promptCommand();
   });
 }
