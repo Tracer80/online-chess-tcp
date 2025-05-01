@@ -6,7 +6,6 @@ class Board {
   }
 
   reset() {
-    // initial chess position
     this.grid = [
       ['r','n','b','q','k','b','n','r'],
       ['p','p','p','p','p','p','p','p'],
@@ -19,19 +18,15 @@ class Board {
     ];
     this.turn = 'WHITE';
 
-    // Castling and movement flags
-    this.whiteKingMoved      = false;
-    this.whiteKingRookMoved  = false; // h1 rook
-    this.whiteQueenRookMoved = false; // a1 rook
-    this.blackKingMoved      = false;
-    this.blackKingRookMoved  = false; // h8 rook
-    this.blackQueenRookMoved = false; // a8 rook
+    this.whiteKingMoved = false;
+    this.whiteKingRookMoved = false;
+    this.whiteQueenRookMoved = false;
+    this.blackKingMoved = false;
+    this.blackKingRookMoved = false;
+    this.blackQueenRookMoved = false;
 
-    // Game-over state
     this.gameOver = false;
-    this.winner   = null;
-
-    // Last invalid move reason
+    this.winner = null;
     this.lastInvalidReason = null;
   }
 
@@ -43,7 +38,7 @@ class Board {
     this.grid[r - 1][c - 1] = v;
   }
 
-  _validatePawn(from, to, piece, dr, dc, isCapture) { /* unchanged pawn logic */
+  _validatePawn(from, to, piece, dr, dc, isCapture) {
     const dir = piece === 'P' ? -1 : +1;
     const startRow = piece === 'P' ? 7 : 2;
     if (!isCapture && dc === 0 && dr === dir) return true;
@@ -62,7 +57,7 @@ class Board {
     );
   }
 
-  _validateKing(from, to, dr, dc) { /* unchanged king logic */
+  _validateKing(from, to, dr, dc) {
     if (Math.abs(dr) <= 1 && Math.abs(dc) <= 1) return true;
     const row = from[0];
     const color = this.turn;
@@ -73,7 +68,7 @@ class Board {
     return false;
   }
 
-  _validateSliding(from, to, dr, dc, allowedDirs) { /* unchanged sliding logic */
+  _validateSliding(from, to, dr, dc, allowedDirs) {
     const stepR = Math.sign(dr);
     const stepC = Math.sign(dc);
     const isDiagonal = Math.abs(dr) === Math.abs(dc);
@@ -90,10 +85,8 @@ class Board {
   }
 
   isValidMove(from, to) {
-    // reset reason
     this.lastInvalidReason = null;
 
-    // 1) bounds check
     if (from[0] < 1 || from[0] > 8 || from[1] < 1 || from[1] > 8 ||
         to[0]   < 1 || to[0]   > 8 || to[1]   < 1 || to[1]   > 8) {
       this.lastInvalidReason = 'Move out of board bounds';
@@ -101,21 +94,20 @@ class Board {
     }
 
     const piece = this.get(from);
-    // 2) no piece
+    const target = this.get(to);
+    console.log(`[DEBUG] Validating ${piece} from ${from} to ${to} (target: ${target})`);
+
     if (piece === '.') {
       this.lastInvalidReason = 'No piece at source square';
       return false;
     }
 
-    // 3) turn enforcement
     const isWhite = piece === piece.toUpperCase();
     if ((this.turn === 'WHITE') !== isWhite) {
       this.lastInvalidReason = `It is not your turn (${this.turn})`;
       return false;
     }
 
-    const target = this.get(to);
-    // 4) self-capture
     if (target !== '.' && (target === target.toUpperCase()) === isWhite) {
       this.lastInvalidReason = 'Cannot capture your own piece';
       return false;
@@ -158,48 +150,114 @@ class Board {
     return ok;
   }
 
-  move(from, to) {
-    if (!this.isValidMove(from, to)) {
-      console.warn(`MOVE_INVALID: ${this.lastInvalidReason}`);
-      return false;
-    }
+  // ... existing code unchanged ...
 
-    const piece  = this.get(from);
-    const target = this.get(to);
-    const dc     = to[1] - from[1];
-
-    // castling rook move
-    if (piece.toUpperCase() === 'K' && Math.abs(dc) === 2) {
-      const row = from[0];
-      if (dc === 2) {
-        this.set([row,6], this.get([row,8])); this.set([row,8], '.');
-      } else {
-        this.set([row,4], this.get([row,1])); this.set([row,1], '.');
-      }
-    }
-
-    // move piece
-    this.set(to, piece);
-    this.set(from, '.');
-
-    // flag moved
-    this._flagMoved(piece, from);
-
-    // king capture
-    if (target.toUpperCase() === 'K') {
-      this.gameOver = true;
-      this.winner   = this.turn;
-    }
-
-    this.turn = this.turn === 'WHITE' ? 'BLACK' : 'WHITE';
-    return true;
+move(from, to) {
+  console.log(`[DEBUG] Attempting move: ${JSON.stringify(from)} → ${JSON.stringify(to)}`);
+  if (!this.isValidMove(from, to)) {
+    console.warn(`MOVE_INVALID: ${this.lastInvalidReason}`);
+    return false;
   }
 
-  // Helper methods (unchanged) ...
-  _clearPath(start, end) { /* ... */ }
-  _kingMoved(color) { /* ... */ }
-  _rookMoved(color, side) { /* ... */ }
-  _flagMoved(piece, from) { /* ... */ }
+  const piece = this.get(from);
+  const target = this.get(to);
+  const dc = to[1] - from[1];
+
+  if (piece.toUpperCase() === 'K' && Math.abs(dc) === 2) {
+    const row = from[0];
+    if (dc === 2) {
+      this.set([row, 6], this.get([row, 8])); this.set([row, 8], '.');
+    } else {
+      this.set([row, 4], this.get([row, 1])); this.set([row, 1], '.');
+    }
+  }
+
+  this.set(to, piece);
+  this.set(from, '.');
+  this._flagMoved(piece, from);
+
+  // Check if move captured a king (fallback)
+  if (target.toUpperCase() === 'K') {
+    this.gameOver = true;
+    this.winner = this.turn;
+  }
+
+  // ✅ ADDED: Checkmate detection
+  const enemy = this.turn === 'WHITE' ? 'BLACK' : 'WHITE';
+  if (this.isInCheck(enemy) && !this.hasLegalMoves(enemy)) {
+    this.gameOver = true;
+    this.winner = this.turn;
+    console.log(`[DEBUG] Checkmate! ${this.turn} wins`);
+  }
+
+  this.turn = enemy;
+  console.log('[DEBUG] Board state after move:');
+  console.table(this.grid);
+  return true;
+}
+
+// ✅ ADDED: Find king's position
+findKing(color) {
+  const kingChar = color === 'WHITE' ? 'K' : 'k';
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 1; c <= 8; c++) {
+      if (this.get([r, c]) === kingChar) return [r, c];
+    }
+  }
+  return null;
+}
+
+// ✅ ADDED: Check if color is in check
+isInCheck(color) {
+  const kingPos = this.findKing(color);
+  if (!kingPos) return false; // captured king (weird edge case)
+  const enemy = color === 'WHITE' ? 'BLACK' : 'WHITE';
+
+  for (let r = 1; r <= 8; r++) {
+    for (let c = 1; c <= 8; c++) {
+      const from = [r, c];
+      const piece = this.get(from);
+      if (piece === '.' || (piece === piece.toUpperCase()) === (color === 'WHITE')) continue;
+
+      const savedTurn = this.turn;
+      this.turn = enemy; // simulate as if it's enemy's move
+      const valid = this.isValidMove(from, kingPos);
+      this.turn = savedTurn;
+
+      if (valid) return true;
+    }
+  }
+  return false;
+}
+
+// ✅ ADDED: Check if player has any legal move
+hasLegalMoves(color) {
+  for (let r1 = 1; r1 <= 8; r1++) {
+    for (let c1 = 1; c1 <= 8; c1++) {
+      const from = [r1, c1];
+      const piece = this.get(from);
+      if (piece === '.' || (piece === piece.toUpperCase()) !== (color === 'WHITE')) continue;
+
+      for (let r2 = 1; r2 <= 8; r2++) {
+        for (let c2 = 1; c2 <= 8; c2++) {
+          const to = [r2, c2];
+          const copy = new Board();
+          copy.grid = JSON.parse(JSON.stringify(this.grid));
+          copy.turn = color;
+          if (copy.move(from, to) && !copy.isInCheck(color)) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  return false;
+}
+
+  _clearPath(start, end) { /* stub or real impl */ }
+  _kingMoved(color) { /* stub or real impl */ }
+  _rookMoved(color, side) { /* stub or real impl */ }
+  _flagMoved(piece, from) { /* stub or real impl */ }
 }
 
 module.exports = Board;

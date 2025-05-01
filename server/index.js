@@ -103,35 +103,38 @@ const server = net.createServer(socket => {
           const ok = session.board.move(from, to);
 
           if (ok) {
-            // Acknowledge to mover
             socket.write(JSON.stringify({
               type: 'MOVE_ACK',
               from,
               to
             }) + '\n');
 
-            // Broadcast updated board
             const update = JSON.stringify({
               type:   'BOARD_UPDATE',
               board:  session.board.grid,
-              timers: session.getTimers(),  // adjust per your API
+              timers: session.getTimers(),
               turn:   session.board.turn
             }) + '\n';
             session.white.socket.write(update);
             session.black.socket.write(update);
 
-            // If a king was captured, game over
             if (session.board.gameOver) {
               const overMsg = JSON.stringify({
-                type:   'GAME_OVER',
+                type: 'GAME_OVER',
                 winner: session.board.winner
               }) + '\n';
               session.white.socket.write(overMsg);
               session.black.socket.write(overMsg);
+            } else if (session.board.isInCheck(session.board.turn)) {
+              const checkMsg = JSON.stringify({
+                type: 'CHECK',
+                color: session.board.turn
+              }) + '\n';
+              session.white.socket.write(checkMsg);
+              session.black.socket.write(checkMsg);
             }
 
           } else {
-            // Send back detailed invalid reason
             socket.write(JSON.stringify({
               type:   'MOVE_INVALID',
               from,
