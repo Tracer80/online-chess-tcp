@@ -6,7 +6,7 @@
   "scripts": {
     "start:server": "node server/index.js",
     "start:client": "node client/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node board_tests.js"
   },
   "repository": {
     "type": "git",

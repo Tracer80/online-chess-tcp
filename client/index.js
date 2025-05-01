@@ -6,17 +6,16 @@ const HOST = 'localhost';
 const PORT = 5555;
 
 let username = '';
-let myColor  = '';   // will become 'WHITE' or 'BLACK'
+let myColor  = '';   // 'WHITE' or 'BLACK'
 
 const socket = net.connect(PORT, HOST, () => {
   console.log(`♟️  Connected to server at ${HOST}:${PORT}`);
 });
 
-// ——— graceful error & close handling ———
+// — graceful error & close handling —
 socket.on('error', err => {
   console.error(`⚠️  Connection error: ${err.message}`);
 });
-
 socket.on('close', hadError => {
   console.log(`🔌 Disconnected from server${hadError ? ' (due to error)' : ''}`);
 });
@@ -37,14 +36,13 @@ socket.on('connect', () => {
   });
 });
 
-// Step 2: handle every server message (supports multiple JSON per packet)
+// Step 2: handle every server message
 socket.on('data', raw => {
   const lines = raw.toString().split('\n').filter(l => l.trim());
   for (const line of lines) {
     let msg;
-    try {
-      msg = JSON.parse(line);
-    } catch (e) {
+    try { msg = JSON.parse(line); }
+    catch (e) {
       console.error('⚠️  Invalid JSON from server:', line);
       continue;
     }
@@ -102,6 +100,10 @@ socket.on('data', raw => {
           `Black: ${msg.timers.black.toFixed(1)}s`
         );
         console.log(`→ ${msg.turn} to move`);
+        // Show captured pieces
+        console.log('⚰️  Graveyard:');
+        console.log('   White:', msg.graveyard.WHITE.join(', ') || '<none>');
+        console.log('   Black:', msg.graveyard.BLACK.join(', ') || '<none>');
         break;
 
       case 'GAME_OVER':
@@ -119,7 +121,7 @@ socket.on('data', raw => {
   rl.prompt();
 });
 
-// Step 3: single readline loop for all your commands
+// Step 3: single readline loop
 rl.on('line', line => {
   const input = line.trim();
   if (!input) return rl.prompt();
@@ -127,14 +129,16 @@ rl.on('line', line => {
   const [cmd, ...args] = input.split(/\s+/);
   switch (cmd) {
     case 'help':
-      console.log('Commands:\n' +
+      console.log(
+        'Commands:\n' +
         '  list\n' +
         '  challenge <user>\n' +
         '  accept    <user>\n' +
         '  reject    <user>\n' +
         '  move r1 c1 r2 c2   (numeric)\n' +
         '  move a2 a4         (algebraic)\n' +
-        '  quit');
+        '  quit'
+      );
       break;
 
     case 'list':

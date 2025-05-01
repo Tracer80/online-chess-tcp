@@ -84,8 +84,7 @@ const server = net.createServer(socket => {
 
         case 'REJECT': {
           const rejecter = socket.username;
-          const fromName = msg.from;
-          const fromEntry = mgr.findClient(fromName);
+          const fromEntry = mgr.findClient(msg.from);
           if (fromEntry) {
             fromEntry.socket.write(JSON.stringify({
               type: 'CHALLENGE_REJECTED',
@@ -103,21 +102,25 @@ const server = net.createServer(socket => {
           const ok = session.board.move(from, to);
 
           if (ok) {
+            // Acknowledge move
             socket.write(JSON.stringify({
               type: 'MOVE_ACK',
               from,
               to
             }) + '\n');
 
+            // Broadcast updated board & graveyard
             const update = JSON.stringify({
-              type:   'BOARD_UPDATE',
-              board:  session.board.grid,
-              timers: session.getTimers(),
-              turn:   session.board.turn
+              type:      'BOARD_UPDATE',
+              board:     session.board.grid,
+              graveyard: session.board.graveyard,
+              timers:    session.getTimers(),
+              turn:      session.board.turn
             }) + '\n';
             session.white.socket.write(update);
             session.black.socket.write(update);
 
+            // Game-over or check notifications
             if (session.board.gameOver) {
               const overMsg = JSON.stringify({
                 type: 'GAME_OVER',
@@ -127,14 +130,14 @@ const server = net.createServer(socket => {
               session.black.socket.write(overMsg);
             } else if (session.board.isInCheck(session.board.turn)) {
               const checkMsg = JSON.stringify({
-                type: 'CHECK',
+                type:  'CHECK',
                 color: session.board.turn
               }) + '\n';
               session.white.socket.write(checkMsg);
               session.black.socket.write(checkMsg);
             }
-
           } else {
+            // Invalid move response
             socket.write(JSON.stringify({
               type:   'MOVE_INVALID',
               from,
@@ -151,8 +154,8 @@ const server = net.createServer(socket => {
     }
   });
 
-  socket.on('close', () => {
-    console.log('Client disconnected:', socket.username || socket.remoteAddress);
+  socket.on('close', hadError => {
+    console.log(`Client disconnected: ${socket.username || socket.remoteAddress}${hadError ? ' (due to error)' : ''}`);
     mgr.removeClient(socket);
   });
 });
